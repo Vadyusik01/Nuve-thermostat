@@ -8,7 +8,7 @@ The integration connects Home Assistant to the Nuve cloud service and provides a
 
 **Current release:** `0.4.0`
 
-Version 0.4.0 is the initial public release. English translations, brand assets, and additional features may be added in future releases.
+Version 0.4.0 is the initial public release.
 
 ## Features
 
