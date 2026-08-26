@@ -1,0 +1,11 @@
+{
+  "domain": "nuve_thermostat",
+  "name": "Nuve Thermostat",
+  "version": "0.5.0",
+  "config_flow": true,
+  "documentation": "https://github.com/Vadyusik01/Nuve-thermostat#readme",
+  "issue_tracker": "https://github.com/Vadyusik01/Nuve-thermostat/issues",
+  "requirements": [],
+  "codeowners": ["@Vadyusik01"],
+  "iot_class": "cloud_polling"
+}
