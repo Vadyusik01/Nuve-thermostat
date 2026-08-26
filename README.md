@@ -180,7 +180,7 @@ Do not include passwords, access tokens, refresh tokens, cookies, or unredacted 
 
 ## License and trademarks
 
-This repository is intended to be released under the MIT License unless a different license is added by the repository owner. Add a `LICENSE` file before publishing a stable release.
+This repository is intended to be released under the MIT License unless a different license is added by the repository owner.
 
 Nuve, Nuve Home, Greenfoot Energy Solutions, and the names and logos of HVAC contractors are trademarks or trade names of their respective owners. This repository does not grant permission to use those trademarks or logos. Brand assets included in this project must be used only with appropriate permission or under an applicable nominative fair-use basis. Remove or replace any logo for which permission has not been obtained.
 
