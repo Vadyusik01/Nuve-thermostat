@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -13,6 +14,9 @@ class NuveApi:
         self.api_url = api_url.rstrip("/")
         self.session = session
         self.token: str | None = None
+        self._email: str | None = None
+        self._password: str | None = None
+        self._reauth_lock = asyncio.Lock()
 
     def _headers(self) -> dict[str, str]:
         h = {
@@ -23,7 +27,14 @@ class NuveApi:
             h["Authorization"] = f"Bearer {self.token}"
         return h
 
-    async def request(self, method: str, path: str, **kwargs) -> Any:
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        _retry: bool = True,
+        **kwargs,
+    ) -> Any:
         url = f"{self.api_url}{path}"
         _LOGGER.debug("Nuve API %s %s", method, url)
         async with self.session.request(
@@ -39,14 +50,25 @@ class NuveApi:
             except Exception:
                 data = {"_raw": text}
 
+            if r.status == 401 and _retry and path != "/login":
+                if self._email and self._password:
+                    _LOGGER.warning("Nuve API 401 on %s, re-login and retry", path)
+                    async with self._reauth_lock:
+                        await self.login(self._email, self._password)
+                    return await self.request(method, path, _retry=False, **kwargs)
+                raise RuntimeError(f"Nuve API 401: {data}")
+
             if r.status >= 400:
                 raise RuntimeError(f"Nuve API {r.status}: {data}")
             return data
 
     async def login(self, email: str, password: str) -> Any:
+        self._email = email
+        self._password = password
         data = await self.request(
             "POST",
             "/login",
+            _retry=False,
             json={"mail": email, "password": password},
         )
         _LOGGER.debug(
@@ -113,30 +135,14 @@ class NuveApi:
         mode: Any,
         client_id: int | str | None = None,
     ) -> Any:
-        # id = код режима (1..6), устройство = sn
+        """Set HVAC mode. API expects id in 1..6 and device serial as sn."""
         try:
             mode_num = int(mode)
         except (TypeError, ValueError):
             mode_num = mode
-
-        payloads = [
-            {"sn": sn, "id": mode_num},
-            {"sn": sn, "id": mode_num, "mode": mode_num},
-            {"sn": sn, "mode": mode_num, "id": mode_num},
-            {"id": mode_num, "sn": sn},
-        ]
-        last_error = None
-        for payload in payloads:
-            try:
-                _LOGGER.debug("set_mode attempt for device %s", sn)
-                result = await self.request("POST", "/device/mode", json=payload)
-                _LOGGER.debug("set_mode accepted for device %s", sn)
-                return result
-            except Exception as exc:
-                last_error = exc
-                _LOGGER.debug("set_mode attempt failed for device %s: %s", sn, exc)
-
-        raise RuntimeError(f"No working set_mode payload: {last_error}")
+        payload = {"sn": sn, "id": mode_num}
+        _LOGGER.debug("set_mode %s", payload)
+        return await self.request("POST", "/device/mode", json=payload)
 
     async def get_fan(self, sn: str) -> Any:
         return await self.request("GET", "/device/fan", params={"sn": sn})
@@ -149,5 +155,88 @@ class NuveApi:
                 "sn": sn,
                 "mode": mode,
                 "workingPerHour": working_per_hour,
+            },
+        )
+
+    async def get_backlight(self, sn: str) -> Any:
+        """Return the device backlight HSV settings."""
+        return await self.request(
+            "GET",
+            "/device/backlight/hsv",
+            params={"sn": sn},
+        )
+
+    async def set_backlight(
+        self,
+        sn: str,
+        *,
+        on: bool,
+        hue: float,
+        saturation: float = 100.0,
+        value: float,
+        shade_index: float,
+        value_scale: float = 1.0,
+    ) -> Any:
+        """Set backlight HSV settings using the mobile app's field names.
+
+        Home Assistant entities expose saturation/value as percentages. The
+        mobile API uses fractional HSV components, so they are converted to
+        0..1 here. ``value_scale`` is retained for compatibility with devices
+        whose GET response uses the older 0..100 representation.
+        """
+        api_value = value / 100.0 if value_scale == 1.0 else value
+        # HA UI: hue degrees 0..360. Nuve API: fractional hue 0..1 (confirmed).
+        api_hue = (float(hue) / 360.0) if float(hue) > 1.0 else float(hue)
+        # Keep saturation usable: if HA has 0 (white), colour changes look like "nothing".
+        sat = float(saturation)
+        if sat <= 0:
+            sat = 100.0
+        api_sat = sat / 100.0 if sat > 1.0 else sat
+        # shadeIndex: leave as provided (0.9.6 /100 made some devices stick on white)
+        # sn in query + body
+        return await self.request(
+            "POST",
+            "/device/backlight/hsv",
+            params={"sn": sn},
+            json={
+                "sn": sn,
+                "on": on,
+                "isOn": on,
+                "hue": api_hue,
+                "saturation": api_sat,
+                "value": api_value,
+                "shadeIndex": float(shade_index),
+            },
+        )
+
+    async def get_backlight_rgb(self, sn: str) -> Any:
+        """Return legacy RGB/backlight state when supported by the device."""
+        return await self.request(
+            "GET",
+            "/device/backlight",
+            params={"sn": sn},
+        )
+
+    async def set_backlight_rgb(
+        self,
+        sn: str,
+        *,
+        red: int,
+        green: int,
+        blue: int,
+        state: bool,
+        blink_type: int = 0,
+    ) -> Any:
+        """Set legacy RGB/backlight state when supported by the device."""
+        return await self.request(
+            "POST",
+            "/device/backlight",
+            json={
+                "sn": sn,
+                "r": red,
+                "g": green,
+                "b": blue,
+                "state": state,
+                "blink_type": blink_type,
             },
         )

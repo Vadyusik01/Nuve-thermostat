@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .api import NuveApi
+from .runtime import async_get_runtime
 _LOGGER = logging.getLogger(__name__)
 
 from .const import (
@@ -21,29 +22,13 @@ from .const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     DOMAIN,
-    SCAN_INTERVAL,
 )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
-    api = NuveApi(entry.data[CONF_API_URL], async_get_clientsession(hass))
-    await api.login(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
-    sn = entry.data[CONF_DEVICE_SN]
-
-    async def update() -> dict[str, Any]:
-        data = await api.main_data(sn)
-        if isinstance(data, dict) and isinstance(data.get("data"), dict):
-            data = data["data"]
-        return data if isinstance(data, dict) else {}
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"Nuve status {sn}",
-        update_method=update,
-        update_interval=timedelta(seconds=SCAN_INTERVAL),
-    )
-    await coordinator.async_config_entry_first_refresh()
+    runtime = await async_get_runtime(hass, entry)
+    coordinator = runtime.status_coordinator
+    sn = runtime.sn
     device_info = {
         "identifiers": {(DOMAIN, sn)},
         "name": f"Nuve Thermostat {sn}",
@@ -76,8 +61,9 @@ class NuveDiagnosticBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         data = self.coordinator.data or {}
+        if isinstance(data.get("main"), dict):
+            data = data["main"]
         value = data.get(self.key)
         if isinstance(value, str):
             return value.lower() in ("true", "1", "yes", "online", "active")
         return bool(value)
-

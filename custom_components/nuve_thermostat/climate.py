@@ -1,27 +1,23 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .api import NuveApi
+from .mode_backlight import mode_key, mode_settings
+from .runtime import async_get_runtime
 from .const import (
     DOMAIN,
-    CONF_API_URL,
-    CONF_EMAIL,
-    CONF_PASSWORD,
     CONF_DEVICE_SN,
     CONF_CONTRACTOR_NAME,
     CONF_CONTRACTOR_BRAND,
-    SCAN_INTERVAL as POLL_SECONDS,
     INTEGRATION_VERSION,
 )
 
@@ -63,6 +59,18 @@ HVAC_TO_API = {
     HVACMode.AUTO: 3,
 }
 
+PRESET_VACATION = "vacation"
+PRESET_AUX_HEAT = "aux_heat"
+
+# id режима -> preset. Гипотеза из разбора APK (SystemMode.Value:
+# Cooling, Heating, Auto, Vacation, Off, EmergencyHeat), требует
+# MITM-подтверждения. До подтверждения режимы 4/6 обрабатываются
+# осторожно: HVACMode либо сохраняется, либо HEAT.
+MODE_ID_TO_PRESET = {
+    4: PRESET_VACATION,
+    6: PRESET_AUX_HEAT,
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -75,25 +83,77 @@ async def async_setup_entry(
             INTEGRATION_VERSION,
             entry.data.get(CONF_DEVICE_SN),
         )
-        api = NuveApi(entry.data[CONF_API_URL], async_get_clientsession(hass))
-        await api.login(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
-        sn = entry.data[CONF_DEVICE_SN]
-
-        async def update():
-            data = await api.main_data(sn)
-            if isinstance(data, dict) and isinstance(data.get("data"), dict):
-                return data["data"]
-            return data
-
-        coordinator = DataUpdateCoordinator(
-            hass,
-            _LOGGER,
-            name=f"Nuve {sn}",
-            update_method=update,
-            update_interval=timedelta(seconds=POLL_SECONDS),
+        runtime = await async_get_runtime(hass, entry)
+        api = runtime.api
+        coordinator = runtime.status_coordinator
+        sn = runtime.sn
+        climate = NuveClimate(
+            coordinator,
+            api,
+            sn,
+            entry.data.get(CONF_CONTRACTOR_NAME, ""),
+            entry.data.get(CONF_CONTRACTOR_BRAND, ""),
         )
-        await coordinator.async_config_entry_first_refresh()
-        _LOGGER.warning(
+        settings = mode_settings(hass, DOMAIN, entry.entry_id)
+
+        async def apply_mode_backlight() -> None:
+            if not settings.get("enabled"):
+                return
+            climate_data = climate._d
+            selected_mode = mode_key(climate_data, climate.hvac_mode, climate.preset_mode)
+            # Диагностика 0.9.3: видно, по каким значениям стадий выбран режим.
+            # Включить в configuration.yaml:
+            #   logger:
+            #     logs:
+            #       custom_components.nuve_thermostat: debug
+            _LOGGER.debug(
+                "mode_key for %s: aux_stage=%s cool_stage=%s heat_stage=%s "
+                "fan_status=%s hvac=%s preset=%s -> %s",
+                sn,
+                climate_data.get("current_aux_stage"),
+                climate_data.get("current_cooling_stage"),
+                climate_data.get("current_heating_stage"),
+                climate_data.get("current_fan_status"),
+                climate.hvac_mode,
+                climate.preset_mode,
+                selected_mode,
+            )
+            mode_values = settings["modes"][selected_mode]
+            applied = settings.get("last_applied")
+            signature = (
+                selected_mode,
+                mode_values["hue"],
+                mode_values["saturation"],
+                mode_values["value"],
+                mode_values["shadeIndex"],
+            )
+            if applied == signature:
+                return
+            try:
+                current_backlight = runtime.backlight_coordinator.data or {
+                    "value_scale": 1.0
+                }
+                await api.set_backlight(
+                    sn,
+                    on=True,
+                    hue=mode_values["hue"],
+                    saturation=mode_values["saturation"],
+                    value=mode_values["value"],
+                    shade_index=mode_values["shadeIndex"],
+                    value_scale=current_backlight["value_scale"],
+                )
+            except Exception:
+                _LOGGER.exception("Unable to apply automatic backlight for %s", sn)
+                return
+            settings["last_applied"] = signature
+            await runtime.backlight_coordinator.async_request_refresh()
+            _LOGGER.debug("Applied %s backlight slider values %s for %s", selected_mode, mode_values, sn)
+
+        settings["apply"] = apply_mode_backlight
+        coordinator.async_add_listener(
+            lambda: hass.async_create_task(apply_mode_backlight())
+        )
+        _LOGGER.debug(
             "Nuve coordinator data keys: %s",
             list((coordinator.data or {}).keys())
             if isinstance(coordinator.data, dict)
@@ -101,16 +161,11 @@ async def async_setup_entry(
         )
         async_add_entities(
             [
-                NuveClimate(
-                    coordinator,
-                    api,
-                    sn,
-                    entry.data.get(CONF_CONTRACTOR_NAME, ""),
-                    entry.data.get(CONF_CONTRACTOR_BRAND, ""),
-                )
+                climate
             ]
         )
-        _LOGGER.warning("Nuve climate entity added OK")
+        await apply_mode_backlight()
+        _LOGGER.debug("Nuve climate entity added OK")
     except Exception:
         _LOGGER.exception("Nuve climate setup FAILED")
         raise
@@ -118,13 +173,17 @@ async def async_setup_entry(
 
 class NuveClimate(CoordinatorEntity, ClimateEntity):
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+    )
     _attr_hvac_modes = [
         HVACMode.OFF,
         HVACMode.HEAT,
         HVACMode.COOL,
         HVACMode.AUTO,
     ]
+    _attr_preset_modes = [PRESET_VACATION, PRESET_AUX_HEAT]
 
     def __init__(
         self,
@@ -148,11 +207,15 @@ class NuveClimate(CoordinatorEntity, ClimateEntity):
             model=contractor_brand or "Nuve HVAC thermostat",
             sw_version=INTEGRATION_VERSION,
         )
+        self._last_hvac_mode = HVACMode.AUTO
 
     @property
     def _d(self) -> dict[str, Any]:
         d = self.coordinator.data
-        return d if isinstance(d, dict) else {}
+        if not isinstance(d, dict):
+            return {}
+        main = d.get("main")
+        return main if isinstance(main, dict) else d
 
     def _get(self, *keys, default=None):
         for k in keys:
@@ -200,9 +263,35 @@ class NuveClimate(CoordinatorEntity, ClimateEntity):
                 return mapped
         mode = self._get("mode", default=0)
         try:
-            return MODE_MAP.get(int(mode), HVACMode.OFF)
+            mode_int = int(mode)
         except (TypeError, ValueError):
             return HVACMode.OFF
+        if mode_int == 4:
+            # Vacation: HVACMode не меняем, показываем последний известный
+            return self._last_hvac_mode
+        if mode_int == 6:
+            # EmergencyHeat: по конвенциям HA это HEAT
+            self._last_hvac_mode = HVACMode.HEAT
+            return HVACMode.HEAT
+        mapped = MODE_MAP.get(mode_int, HVACMode.OFF)
+        self._last_hvac_mode = mapped
+        return mapped
+
+    @property
+    def preset_mode(self):
+        mode = self._get("mode", default=0)
+        try:
+            preset = MODE_ID_TO_PRESET.get(int(mode))
+        except (TypeError, ValueError):
+            preset = None
+        if preset is None:
+            # Запасной вариант: у устройства есть отдельный флаг vacation
+            vac = self._get("is_vacation", "vacation")
+            if isinstance(vac, bool) and vac:
+                return PRESET_VACATION
+            if str(vac).lower() in ("true", "1", "on", "yes"):
+                return PRESET_VACATION
+        return preset
 
     @property
     def hvac_action(self):
@@ -256,5 +345,15 @@ class NuveClimate(CoordinatorEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode):
         api_mode = HVAC_TO_API.get(hvac_mode, 1)
+        await self.api.set_mode(self.sn, api_mode)
+        await self.coordinator.async_request_refresh()
+
+    async def async_set_preset_mode(self, preset_mode):
+        if preset_mode == PRESET_VACATION:
+            api_mode = 4
+        elif preset_mode == PRESET_AUX_HEAT:
+            api_mode = 6
+        else:
+            return
         await self.api.set_mode(self.sn, api_mode)
         await self.coordinator.async_request_refresh()

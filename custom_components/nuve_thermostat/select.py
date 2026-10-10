@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .api import NuveApi
+from .runtime import async_get_runtime
 from .const import (
     CONF_API_URL,
     CONF_CONTRACTOR_BRAND,
@@ -43,24 +44,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    api = NuveApi(entry.data[CONF_API_URL], async_get_clientsession(hass))
-    await api.login(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
-    sn = entry.data[CONF_DEVICE_SN]
-
-    async def update() -> Any:
-        data = await api.get_fan(sn)
-        if isinstance(data, dict) and isinstance(data.get("data"), dict):
-            return data["data"]
-        return data
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"Nuve fan {sn}",
-        update_method=update,
-        update_interval=timedelta(seconds=POLL_SECONDS),
-    )
-    await coordinator.async_config_entry_first_refresh()
+    runtime = await async_get_runtime(hass, entry)
+    api = runtime.api
+    coordinator = runtime.fan_coordinator
+    sn = runtime.sn
     async_add_entities(
         [
             NuveFanScheduleSelect(

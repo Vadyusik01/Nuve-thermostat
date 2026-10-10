@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .api import NuveApi
+from .runtime import async_get_runtime
 from .const import (
     CONF_API_URL,
     CONF_CONTRACTOR_BRAND,
@@ -19,48 +20,15 @@ from .const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     DOMAIN,
-    SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
-    api = NuveApi(entry.data[CONF_API_URL], async_get_clientsession(hass))
-    await api.login(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
-    sn = entry.data[CONF_DEVICE_SN]
-
-    try:
-        static_info = await api.get_static_info(sn)
-        if isinstance(static_info, dict) and isinstance(static_info.get("data"), dict):
-            static_info = static_info["data"]
-        if not isinstance(static_info, dict):
-            static_info = {}
-    except Exception as exc:
-        _LOGGER.debug("Nuve static info unavailable: %s", exc)
-        static_info = {}
-
-    async def update() -> dict[str, Any]:
-        main = await api.main_data(sn)
-        if isinstance(main, dict) and isinstance(main.get("data"), dict):
-            main = main["data"]
-        if not isinstance(main, dict):
-            main = {}
-        try:
-            alerts = await api.get_alerts(sn)
-        except Exception as exc:
-            _LOGGER.debug("Nuve alerts unavailable: %s", exc)
-            alerts = {}
-        return {"main": main, "static": static_info, "alerts": alerts}
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"Nuve diagnostics {sn}",
-        update_method=update,
-        update_interval=timedelta(seconds=SCAN_INTERVAL),
-    )
-    await coordinator.async_config_entry_first_refresh()
+    runtime = await async_get_runtime(hass, entry)
+    coordinator = runtime.status_coordinator
+    sn = runtime.sn
     device_info = {
         "identifiers": {(DOMAIN, sn)},
         "name": f"Nuve Thermostat {sn}",

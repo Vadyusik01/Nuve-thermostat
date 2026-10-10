@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nuve Thermostat",
+        "description": "Enter the email and password from the Nuve or contractor-branded mobile app.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "select_device": {
+        "title": "Select thermostat",
+        "description": "Multiple thermostats were found on this account.",
+        "data": {
+          "device_sn": "Thermostat"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Nuve cloud API. Check credentials and network.",
+      "no_devices": "No thermostats were found for this account."
+    },
+    "abort": {
+      "already_configured": "This thermostat is already configured."
+    }
+  }
+}
