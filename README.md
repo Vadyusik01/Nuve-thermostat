@@ -4,7 +4,7 @@ A free and open-source **Home Assistant custom integration** for Nuve cloud ther
 
 This is an independent community project. It is **not** affiliated with, sponsored by, or endorsed by Nuve Controls LLC, Nuve Home, Greenfoot Energy Solutions, or any HVAC contractor.
 
-**Current release:** `0.9.8`
+**Current release:** `0.9.9`
 
 ---
 
@@ -138,7 +138,7 @@ data:
 
 ---
 
-## Changelog (0.4.0 → 0.9.8)
+## Changelog (0.4.0 → 0.9.9)
 
 Intermediate builds were used for testing and were **not** all published on GitHub. This section is the consolidated history for a single public jump from **0.4.0** to **0.9.8**.
 
@@ -188,7 +188,7 @@ Intermediate builds were used for testing and were **not** all published on GitH
 
 - Avoid “always white” after hue fix: do not force-scale `shadeIndex` incorrectly; if saturation is 0 when setting hue, raise saturation so color is visible
 
-### 0.9.8 (current)
+### 0.9.8
 
 - Automatic backlight priority aligned with real use:
   1. Active stages (bright aux / cool / heat)
@@ -196,6 +196,11 @@ Intermediate builds were used for testing and were **not** all published on GitH
   3. Vacation only when idle
   4. Selected HVAC mode (dim idle cool/heat)
 - Stable cloud climate + fan + backlight stack for daily use
+
+### 0.9.9 (current)
+
+- Backlight colour presets and sliders are now **configuration** entities (`entity_category = config`): the per-mode colour entities, the backlight hue / brightness / shade sliders and the Automatic mode backlight switch live under **Configuration** on the device page and no longer appear as room lighting.
+- No logic changes; climate, the Backlight switch and fan circulation are unchanged.
 
 ---
 
@@ -239,7 +244,7 @@ The integration talks only to Nuve’s cloud API. Credentials live in the HA con
 ## Support
 
 - Issues: [GitHub Issues](https://github.com/Vadyusik01/Nuve-thermostat/issues)
-- Include HA version, integration version (`manifest` / `0.9.8`), app brand, and a **redacted** log
+- Include HA version, integration version (`manifest` / `0.9.9`), app brand, and a **redacted** log
 
 ---
 
