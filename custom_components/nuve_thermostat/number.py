@@ -8,6 +8,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .api import NuveApi
@@ -60,6 +61,7 @@ async def async_setup_entry(
 
 
 class NuveBacklightNumber(CoordinatorEntity, NumberEntity):
+    _attr_entity_category = EntityCategory.CONFIG
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,

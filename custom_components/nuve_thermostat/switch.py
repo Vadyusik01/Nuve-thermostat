@@ -8,6 +8,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
@@ -87,6 +88,7 @@ class NuveBacklightSwitch(CoordinatorEntity, SwitchEntity):
 
 
 class NuveAutomaticModeBacklightSwitch(RestoreEntity, SwitchEntity):
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_name = "Automatic mode backlight"
     _attr_icon = "mdi:theme-light-dark"
 

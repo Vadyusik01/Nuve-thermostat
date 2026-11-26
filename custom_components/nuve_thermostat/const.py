@@ -1,5 +1,5 @@
 DOMAIN = "nuve_thermostat"
-INTEGRATION_VERSION = "0.9.8"
+INTEGRATION_VERSION = "0.9.9"
 DEFAULT_API = "https://mobileapi.nuvehvac.com/api"
 CONF_API_URL = "api_url"
 CONF_EMAIL = "email"

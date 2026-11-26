@@ -5,6 +5,7 @@ from typing import Any
 from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 
 from .const import (
     CONF_CONTRACTOR_BRAND,
@@ -35,6 +36,9 @@ async def async_setup_entry(
 
 
 class NuveModeBacklightLight(LightEntity):
+    # Per-mode colour presets are settings, not real lights:
+    # show them under Configuration, not with the room lighting.
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_supported_color_modes = {ColorMode.HS}
     _attr_color_mode = ColorMode.HS
 
