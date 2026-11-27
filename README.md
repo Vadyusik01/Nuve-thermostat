@@ -4,7 +4,7 @@ A free and open-source **Home Assistant custom integration** for Nuve cloud ther
 
 This is an independent community project. It is **not** affiliated with, sponsored by, or endorsed by Nuve Controls LLC, Nuve Home, Greenfoot Energy Solutions, or any HVAC contractor.
 
-**Current release:** `0.9.9`
+**Current release:** `0.10.0`
 
 ---
 
@@ -138,7 +138,7 @@ data:
 
 ---
 
-## Changelog (0.4.0 → 0.9.9)
+## Changelog (0.4.0 → 0.10.0)
 
 Intermediate builds were used for testing and were **not** all published on GitHub. This section is the consolidated history for a single public jump from **0.4.0** to **0.9.8**.
 
@@ -197,10 +197,16 @@ Intermediate builds were used for testing and were **not** all published on GitH
   4. Selected HVAC mode (dim idle cool/heat)
 - Stable cloud climate + fan + backlight stack for daily use
 
-### 0.9.9 (current)
+### 0.9.9
 
 - Backlight colour presets and sliders are now **configuration** entities (`entity_category = config`): the per-mode colour entities, the backlight hue / brightness / shade sliders and the Automatic mode backlight switch live under **Configuration** on the device page and no longer appear as room lighting.
 - No logic changes; climate, the Backlight switch and fan circulation are unchanged.
+
+### 0.10.0 (current)
+- New **Current activity** sensor: what the equipment is actually doing — heating, cooling, auxiliary heating, fan circulation, idle, off — from the real stage/fan fields; dynamic icon, translated states (EN/RU), raw stage fields as attributes.
+- `climate.hvac_action` reports aux heating and fan-only circulation correctly (fan-only no longer looks idle).
+- Built-in **runtime counters**: heating / cooling / auxiliary heating / fan circulation — total hours and hours today, persisted across restarts; fan counts circulation only (no double-counting).
+- Backlight hue / brightness / saturation rounded to 0.1 after rescaling (no more long floats like 49.060773480663).
 
 ---
 
@@ -244,8 +250,7 @@ The integration talks only to Nuve’s cloud API. Credentials live in the HA con
 ## Support
 
 - Issues: [GitHub Issues](https://github.com/Vadyusik01/Nuve-thermostat/issues)
-- Include HA version, integration version (`manifest` / `0.9.9`), app brand, and a **redacted** log
-
+- Include HA version, integration version (`manifest` / `0.10.0`), app brand, and a **redacted** log
 ---
 
 ## License / disclaimer
