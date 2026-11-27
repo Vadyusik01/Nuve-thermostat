@@ -41,14 +41,18 @@ def backlight_values(data: Any) -> dict[str, Any]:
     normalized = unwrap_backlight(data)
     raw_value = as_float(normalized, "value", "brightness", default=100.0)
     value_scale = 1.0 if 0.0 <= raw_value <= 1.0 else 100.0
-    value = raw_value * 100.0 if value_scale == 1.0 else raw_value
+    # Round rescaled values: 0..1 -> 0..100 / 0..360 otherwise leaks long
+    # binary floats into the UI (hue showed as 49.060773480663).
+    value = round(raw_value * 100.0 if value_scale == 1.0 else raw_value, 1)
 
     raw_saturation = as_float(normalized, "saturation", default=100.0)
-    saturation = raw_saturation * 100.0 if 0.0 <= raw_saturation <= 1.0 else raw_saturation
+    saturation = round(
+        raw_saturation * 100.0 if 0.0 <= raw_saturation <= 1.0 else raw_saturation, 1
+    )
 
     raw_hue = as_float(normalized, "hue", default=0.0)
     # API returns hue 0..1; HA number entity uses degrees 0..360
-    hue = raw_hue * 360.0 if 0.0 <= raw_hue <= 1.0 else raw_hue
+    hue = round(raw_hue * 360.0 if 0.0 <= raw_hue <= 1.0 else raw_hue, 1)
 
     # shadeIndex: pass through (do not rescale; device-specific)
     shade = as_float(normalized, "shadeIndex", "shade_index", default=0.0)

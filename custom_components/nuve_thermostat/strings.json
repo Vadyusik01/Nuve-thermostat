@@ -24,5 +24,20 @@
     "abort": {
       "already_configured": "This thermostat is already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "current_activity": {
+        "name": "Current activity",
+        "state": {
+          "heating": "Heating",
+          "cooling": "Cooling",
+          "aux_heat": "Auxiliary heating",
+          "fan": "Fan circulation",
+          "idle": "Idle",
+          "off": "Off"
+        }
+      }
+    }
   }
 }

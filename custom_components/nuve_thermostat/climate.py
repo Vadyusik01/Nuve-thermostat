@@ -12,6 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 
 from .api import NuveApi
 from .mode_backlight import mode_key, mode_settings
+from .runtime_stats import current_activity
 from .runtime import async_get_runtime
 from .const import (
     DOMAIN,
@@ -295,15 +296,20 @@ class NuveClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_action(self):
-        try:
-            cooling = self._get("current_cooling_stage")
-            heating = self._get("current_heating_stage")
-            if cooling is not None and int(cooling) > 0:
-                return HVACAction.COOLING
-            if heating is not None and int(heating) > 0:
-                return HVACAction.HEATING
-        except (TypeError, ValueError):
-            pass
+        # Real equipment activity, not just the selected mode: aux stage,
+        # cooling/heating stages and fan-only circulation (periodic
+        # ventilation) are all visible here.
+        activity = current_activity(self._d)
+        if activity == "cooling":
+            return HVACAction.COOLING
+        if activity in ("heating", "aux_heat"):
+            return HVACAction.HEATING
+        if activity == "fan":
+            return HVACAction.FAN
+        if activity == "off":
+            return HVACAction.OFF
+        if activity == "idle":
+            return HVACAction.IDLE
         if self.hvac_mode == HVACMode.OFF:
             return HVACAction.OFF
         return HVACAction.IDLE
