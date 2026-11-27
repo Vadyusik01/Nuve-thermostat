@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nuve Thermostat",
+        "description": "Введите email и пароль из приложения Nuve или бренда подрядчика.",
+        "data": {
+          "email": "Email",
+          "password": "Пароль"
+        }
+      },
+      "select_device": {
+        "title": "Выбор термостата",
+        "description": "В аккаунте найдено несколько термостатов.",
+        "data": {
+          "device_sn": "Термостат"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться к облаку Nuve. Проверьте логин и сеть.",
+      "no_devices": "Для этого аккаунта термостаты не найдены."
+    },
+    "abort": {
+      "already_configured": "Этот термостат уже настроен."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_activity": {
+        "name": "Текущая активность",
+        "state": {
+          "heating": "Отопление",
+          "cooling": "Охлаждение",
+          "aux_heat": "Дополнительный нагрев",
+          "fan": "Циркуляция вентилятора",
+          "idle": "Простой",
+          "off": "Выключено"
+        }
+      }
+    }
+  }
+}
